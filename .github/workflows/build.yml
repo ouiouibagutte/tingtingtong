@@ -21,19 +21,17 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Dependencies
+      - name: Install Build Tools
         run: |
           pip install flet yt-dlp
           
       - name: Build APK
         run: |
-          # --name: Sets the label under the icon on your phone
-          # --icon: Uses your icon.png file
-          # --splash: Uses your splash.png file
+          # Removed --splash to fix the "ambiguous option" error
+          # Using --product for the app name
           flet build apk \
-            --name "bobsiclesMp3s" \
+            --product "bobsiclesMp3s" \
             --icon "icon.png" \
-            --splash "splash.png" \
             --verbose
           
       - name: Upload APK
