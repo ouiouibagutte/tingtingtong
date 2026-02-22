@@ -27,18 +27,20 @@ jobs:
           
       - name: Build APK
         run: |
-          # 1. Create the assets folder (Flet 0.80+ requirement)
+          # 1. Ensure the assets folder exists for Flet 0.80+
           mkdir -p assets
           
-          # 2. Move your icon into the folder so Flet finds it automatically
+          # 2. Automatically move your icon if you forgot to put it in assets
           if [ -f "icon.png" ]; then
             cp icon.png assets/icon.png
           fi
           
-          # 3. Build command (Removed --icon and --splash flags)
+          # 3. The --yes flag answers "y" to the Flutter SDK installation automatically.
+          # We use --product for the app name and add storage permissions.
           flet build apk \
             --product "bobsiclesMp3s" \
             --android-permissions "android.permission.WRITE_EXTERNAL_STORAGE=True android.permission.READ_EXTERNAL_STORAGE=True" \
+            --yes \
             --verbose
           
       - name: Upload APK
