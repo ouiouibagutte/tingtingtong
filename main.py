@@ -4,14 +4,19 @@ import os
 import threading
 
 # --- CONFIGURATION ---
-DOWNLOAD_PATH = "downloads"
+# This ensures files go to the public Downloads folder on Android
+if os.name != 'nt': 
+    DOWNLOAD_PATH = "/sdcard/Download"
+else:
+    DOWNLOAD_PATH = "downloads"
+
 if not os.path.exists(DOWNLOAD_PATH):
     os.makedirs(DOWNLOAD_PATH)
 
 class MusicLoaderApp:
     def __init__(self, page: ft.Page):
         self.page = page
-        self.page.title = "Music Loader Pro"
+        self.page.title = "Bobsicles Mp3s Pro"
         self.page.theme_mode = ft.ThemeMode.DARK
         self.page.padding = 20
         self.page.window_width = 400
@@ -20,11 +25,11 @@ class MusicLoaderApp:
         # UI Elements
         self.url_input = ft.TextField(
             label="YouTube Links",
-            hint_text="Paste links here (one per line)",  # Changed from placeholder
+            hint_text="Paste links here (one per line)",
             multiline=True,
             min_lines=3,
             max_lines=5,
-            border_color=ft.Colors.BLUE_700  # Note the capital 'C'
+            border_color=ft.Colors.BLUE_700
         )
         
         self.progress_bar = ft.ProgressBar(width=400, color="blue", visible=False)
@@ -43,15 +48,12 @@ class MusicLoaderApp:
             self.progress_bar.visible = False
             self.page.update()
 
+    # --- DOWNLOAD LOGIC (Mobile Optimized) ---
     def run_downloads(self, urls):
+        # We use m4a to avoid the 'FFmpeg not found' error on Android
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': 'bestaudio[ext=m4a]', 
             'outtmpl': os.path.join(DOWNLOAD_PATH, '%(title)s.%(ext)s'),
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
             'progress_hooks': [self.progress_hook],
             'quiet': True,
             'noplaylist': True,
@@ -64,7 +66,7 @@ class MusicLoaderApp:
                 self.log(f"🚀 Starting: {url[:30]}...", ft.Colors.BLUE_200)
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
-                self.log(f"✅ Downloaded successfully!", ft.Colors.GREEN_400)
+                self.log(f"✅ Saved to Downloads!", ft.Colors.GREEN_400)
             except Exception as e:
                 self.log(f"❌ Failed: {str(e)}", ft.Colors.RED_400)
         
@@ -74,19 +76,21 @@ class MusicLoaderApp:
     def start_download_thread(self, e):
         urls = self.url_input.value.splitlines()
         if not urls:
-            self.page.snack_bar = ft.SnackBar(ft.Text("Please enter at least one URL"))
+            self.page.snack_bar = ft.SnackBar(ft.Text("Please enter a link!"))
             self.page.snack_bar.open = True
             self.page.update()
             return
         
         threading.Thread(target=self.run_downloads, args=(urls,), daemon=True).start()
 
+    # --- DUPLICATE CHECKER ---
     def check_duplicates(self, e):
         self.log_column.controls.clear()
         self.dup_list.controls.clear()
         self.log("🔎 Scanning library...", ft.Colors.AMBER)
         
-        files = [f for f in os.listdir(DOWNLOAD_PATH) if f.endswith('.mp3')]
+        # Check for both formats
+        files = [f for f in os.listdir(DOWNLOAD_PATH) if f.endswith(('.mp3', '.m4a'))]
         seen_files = {} 
         duplicates = []
 
@@ -134,11 +138,13 @@ class MusicLoaderApp:
             self.log(f"Error deleting: {e}")
 
     def build(self):
+        # Header Section
         header = ft.Column([
-            ft.Text("Music Loader", size=32, weight="bold", color="blue"),
-            ft.Text("Batch Downloader & Manager", size=14, color="grey"),
+            ft.Text("Bobsicles Mp3s", size=32, weight="bold", color="blue"),
+            ft.Text("Mobile Batch Downloader", size=14, color="grey"),
         ], spacing=0)
 
+        # Action Buttons
         buttons = ft.Row([
             ft.ElevatedButton(
                 "Download", 
@@ -148,11 +154,12 @@ class MusicLoaderApp:
             ),
             ft.OutlinedButton(
                 "Check Dups", 
-                icon=ft.Icons.REPLAY,  # Changed from REPEATING_FFS
+                icon=ft.Icons.REPLAY,
                 on_click=self.check_duplicates
             ),
         ], alignment=ft.MainAxisAlignment.CENTER)
 
+        # Main Layout
         self.page.add(
             header,
             ft.Divider(height=20, color="transparent"),
@@ -175,5 +182,4 @@ def main(page: ft.Page):
     app = MusicLoaderApp(page)
     app.build()
 
-# The modern way to run the app
 ft.app(main)
