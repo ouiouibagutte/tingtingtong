@@ -23,23 +23,24 @@ jobs:
 
       - name: Install Build Tools
         run: |
+          # We only need these two to build the app
           pip install flet yt-dlp
           
       - name: Build APK
         run: |
-          # 1. Ensure the assets folder exists for Flet 0.80+
+          # 1. Create the assets folder for the icon (Flet 0.80+ requirement)
           mkdir -p assets
           
-          # 2. Automatically move your icon if you forgot to put it in assets
+          # 2. Move your icon if it's in the main folder
           if [ -f "icon.png" ]; then
             cp icon.png assets/icon.png
           fi
           
-          # 3. The --yes flag answers "y" to the Flutter SDK installation automatically.
-          # We use --product for the app name and add storage permissions.
+          # 3. The --yes flag automates the Flutter SDK download.
+          # We added extra permissions so the app can save to your phone's Download folder.
           flet build apk \
             --product "bobsiclesMp3s" \
-            --android-permissions "android.permission.WRITE_EXTERNAL_STORAGE=True android.permission.READ_EXTERNAL_STORAGE=True" \
+            --android-permissions "android.permission.WRITE_EXTERNAL_STORAGE=True android.permission.READ_EXTERNAL_STORAGE=True android.permission.INTERNET=True" \
             --yes \
             --verbose
           
