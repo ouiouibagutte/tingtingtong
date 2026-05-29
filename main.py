@@ -52,8 +52,13 @@ class MusicLoaderApp:
     def run_downloads(self, urls):
         # We use m4a to avoid the 'FFmpeg not found' error on Android
         ydl_opts = {
-            'format': 'bestaudio[ext=m4a]', 
+            'format': 'bestaudio/best',
+            'extractaudio': True,
             'outtmpl': os.path.join(DOWNLOAD_PATH, '%(title)s.%(ext)s'),
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'm4a',
+            }],
             'progress_hooks': [self.progress_hook],
             'quiet': True,
             'noplaylist': True,
