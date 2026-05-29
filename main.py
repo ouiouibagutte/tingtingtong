@@ -32,6 +32,15 @@ class MusicLoaderApp:
             border_color=ft.Colors.BLUE_700
         )
         
+        # New Feature: Format selector switch (Defaults to Audio)
+        self.format_selector = ft.RadioGroup(
+            content=ft.Row([
+                ft.Radio(value="audio", label="Audio Only (M4A)"),
+                ft.Radio(value="video", label="Full Video (MP4)")
+            ], alignment=ft.MainAxisAlignment.CENTER)
+        )
+        self.format_selector.value = "audio"  # Set default value
+        
         self.progress_bar = ft.ProgressBar(width=400, color="blue", visible=False)
         self.log_column = ft.Column(scroll=ft.ScrollMode.ADAPTIVE, expand=True)
         self.dup_list = ft.Column(visible=False)
@@ -49,16 +58,20 @@ class MusicLoaderApp:
             self.page.update()
 
     # --- DOWNLOAD LOGIC (Mobile Optimized) ---
-    def run_downloads(self, urls):
-        # We use m4a to avoid the 'FFmpeg not found' error on Android
+    def run_downloads(self, urls, download_mode):
+        # Configure format properties based on the UI toggle switch
+        if download_mode == "video":
+            # Grabs pre-merged progressive MP4 files (720p/360p)
+            self.log("📹 Format Mode: Progressive MP4 Video", ft.Colors.BLUE_400)
+            format_rule = 'best[ext=mp4]/progressive'
+        else:
+            # Grabs YouTube's native M4A/AAC stream directly
+            self.log("🎵 Format Mode: Native M4A Audio", ft.Colors.BLUE_400)
+            format_rule = '140/bestaudio[ext=m4a]'
+
         ydl_opts = {
-            'format': 'bestaudio/best',
-            'extractaudio': True,
+            'format': format_rule, 
             'outtmpl': os.path.join(DOWNLOAD_PATH, '%(title)s.%(ext)s'),
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'm4a',
-            }],
             'progress_hooks': [self.progress_hook],
             'quiet': True,
             'noplaylist': True,
@@ -86,7 +99,9 @@ class MusicLoaderApp:
             self.page.update()
             return
         
-        threading.Thread(target=self.run_downloads, args=(urls,), daemon=True).start()
+        # Pass the chosen format value down to the execution thread
+        mode = self.format_selector.value
+        threading.Thread(target=self.run_downloads, args=(urls, mode), daemon=True).start()
 
     # --- DUPLICATE CHECKER ---
     def check_duplicates(self, e):
@@ -94,8 +109,8 @@ class MusicLoaderApp:
         self.dup_list.controls.clear()
         self.log("🔎 Scanning library...", ft.Colors.AMBER)
         
-        # Check for both formats
-        files = [f for f in os.listdir(DOWNLOAD_PATH) if f.endswith(('.mp3', '.m4a'))]
+        # Scans comprehensively for both your audio items and video packages
+        files = [f for f in os.listdir(DOWNLOAD_PATH) if f.endswith(('.mp3', '.m4a', '.mp4'))]
         seen_files = {} 
         duplicates = []
 
@@ -169,6 +184,9 @@ class MusicLoaderApp:
             header,
             ft.Divider(height=20, color="transparent"),
             self.url_input,
+            ft.Text("Select Format Option:", size=14, weight="bold", color="blue_200"),
+            self.format_selector,
+            ft.Divider(height=10, color="transparent"),
             buttons,
             self.progress_bar,
             ft.Text("Logs & Activity", size=16, weight="bold"),
