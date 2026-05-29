@@ -37,10 +37,10 @@ jobs:
           fi
           
           # 3. The --yes flag automates the Flutter SDK download.
-          # We added extra permissions so the app can save to your phone's Download folder.
+          # Handled permission parameters distinctly with lowercase boolean definitions.
           flet build apk \
             --product "bobsiclesMp3s" \
-            --android-permissions "android.permission.WRITE_EXTERNAL_STORAGE=True android.permission.READ_EXTERNAL_STORAGE=True android.permission.INTERNET=True" \
+            --android-permissions android.permission.WRITE_EXTERNAL_STORAGE=true android.permission.READ_EXTERNAL_STORAGE=true android.permission.INTERNET=true \
             --yes \
             --verbose
           
