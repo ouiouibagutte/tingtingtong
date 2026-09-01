@@ -4,7 +4,6 @@ import os
 import threading
 
 # --- CONFIGURATION ---
-# This ensures files go to the public Downloads folder on Android
 if os.name != 'nt': 
     DOWNLOAD_PATH = "/sdcard/Download"
 else:
@@ -22,6 +21,9 @@ class MusicLoaderApp:
         self.page.window_width = 400
         self.page.window_height = 800
         
+        # State management
+        self.is_downloading = False
+        
         # UI Elements
         self.url_input = ft.TextField(
             label="YouTube Links",
@@ -32,42 +34,59 @@ class MusicLoaderApp:
             border_color=ft.Colors.BLUE_700
         )
         
-        # New Feature: Format selector switch (Defaults to Audio)
         self.format_selector = ft.RadioGroup(
             content=ft.Row([
-                ft.Radio(value="audio", label="Audio Only (M4A)"),
-                ft.Radio(value="video", label="Full Video (MP4)")
+                ft.Radio(value="audio", label="Audio (M4A)"),
+                ft.Radio(value="video", label="Video (MP4)")
             ], alignment=ft.MainAxisAlignment.CENTER)
         )
-        self.format_selector.value = "audio"  # Set default value
+        self.format_selector.value = "audio" 
         
         self.progress_bar = ft.ProgressBar(width=400, color="blue", visible=False)
         self.log_column = ft.Column(scroll=ft.ScrollMode.ADAPTIVE, expand=True)
         self.dup_list = ft.Column(visible=False)
 
+        # Buttons
+        self.btn_download = ft.ElevatedButton(
+            "Download", 
+            icon=ft.Icons.DOWNLOAD, 
+            on_click=self.start_download_thread,
+            style=ft.ButtonStyle(color=ft.Colors.WHITE, bgcolor=ft.Colors.BLUE_800)
+        )
+        self.btn_clear_logs = ft.IconButton(
+            icon=ft.Icons.DELETE_SWEEP, 
+            tooltip="Clear Logs",
+            icon_color="grey",
+            on_click=self.clear_logs
+        )
+
     def log(self, message, color=ft.Colors.WHITE):
         self.log_column.controls.append(ft.Text(message, color=color, size=14))
         self.page.update()
 
+    def clear_logs(self, e):
+        self.log_column.controls.clear()
+        self.page.update()
+
     def progress_hook(self, d):
         if d['status'] == 'downloading':
-            self.progress_bar.visible = True
-            self.page.update()
-        if d['status'] == 'finished':
+            if not self.progress_bar.visible:
+                self.progress_bar.visible = True
+                self.page.update()
+        elif d['status'] == 'finished':
             self.progress_bar.visible = False
             self.page.update()
 
     # --- DOWNLOAD LOGIC (Mobile Optimized) ---
     def run_downloads(self, urls, download_mode):
-        # Configure format properties based on the UI toggle switch
         if download_mode == "video":
-            # Grabs pre-merged progressive MP4 files (720p/360p)
             self.log("📹 Format Mode: Progressive MP4 Video", ft.Colors.BLUE_400)
-            format_rule = 'best[ext=mp4]/progressive'
+            # Grabs a single pre-merged file so Android doesn't need ffmpeg to combine them
+            format_rule = 'best[ext=mp4]/best'
         else:
-            # Grabs YouTube's native M4A/AAC stream directly
-            self.log("🎵 Format Mode: Native M4A Audio", ft.Colors.BLUE_400)
-            format_rule = '140/bestaudio[ext=m4a]'
+            self.log("🎵 Format Mode: Audio Streams", ft.Colors.BLUE_400)
+            # Falls back gracefully if 140/m4a is geo-blocked
+            format_rule = 'bestaudio[ext=m4a]/bestaudio/best'
 
         ydl_opts = {
             'format': format_rule, 
@@ -75,31 +94,43 @@ class MusicLoaderApp:
             'progress_hooks': [self.progress_hook],
             'quiet': True,
             'noplaylist': True,
+            # Bypass for the 403 Forbidden error using client spoofing
+            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+            'nocheckcertificate': True
         }
 
         for url in urls:
-            url = url.strip()
             if not url: continue
             try:
                 self.log(f"🚀 Starting: {url[:30]}...", ft.Colors.BLUE_200)
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
-                self.log(f"✅ Saved to Downloads!", ft.Colors.GREEN_400)
+                self.log("✅ Saved to Downloads!", ft.Colors.GREEN_400)
             except Exception as e:
                 self.log(f"❌ Failed: {str(e)}", ft.Colors.RED_400)
         
+        # Reset UI post-download
         self.progress_bar.visible = False
+        self.is_downloading = False
+        self.btn_download.disabled = False
         self.page.update()
 
     def start_download_thread(self, e):
-        urls = self.url_input.value.splitlines()
+        # Extract and clean URLs
+        raw_urls = self.url_input.value.splitlines() if self.url_input.value else []
+        urls = [u.strip() for u in raw_urls if u.strip()]
+        
         if not urls:
-            self.page.snack_bar = ft.SnackBar(ft.Text("Please enter a link!"))
+            self.page.snack_bar = ft.SnackBar(ft.Text("Please enter a valid link!"))
             self.page.snack_bar.open = True
             self.page.update()
             return
         
-        # Pass the chosen format value down to the execution thread
+        # Lock button to prevent duplicate concurrent threads
+        self.is_downloading = True
+        self.btn_download.disabled = True
+        self.page.update()
+        
         mode = self.format_selector.value
         threading.Thread(target=self.run_downloads, args=(urls, mode), daemon=True).start()
 
@@ -109,7 +140,6 @@ class MusicLoaderApp:
         self.dup_list.controls.clear()
         self.log("🔎 Scanning library...", ft.Colors.AMBER)
         
-        # Scans comprehensively for both your audio items and video packages
         files = [f for f in os.listdir(DOWNLOAD_PATH) if f.endswith(('.mp3', '.m4a', '.mp4'))]
         seen_files = {} 
         duplicates = []
@@ -135,7 +165,7 @@ class MusicLoaderApp:
                     ft.Container(
                         content=ft.Row([
                             ft.Icon(ft.Icons.COPY, color="amber"),
-                            ft.Text(f"{fname[:25]}...", expand=True),
+                            ft.Text(f"{fname[:20]}...", expand=True),
                             ft.IconButton(
                                 icon=ft.Icons.DELETE_FOREVER,
                                 icon_color="red",
@@ -158,20 +188,13 @@ class MusicLoaderApp:
             self.log(f"Error deleting: {e}")
 
     def build(self):
-        # Header Section
         header = ft.Column([
             ft.Text("Bobsicles Mp3s", size=32, weight="bold", color="blue"),
             ft.Text("Mobile Batch Downloader", size=14, color="grey"),
         ], spacing=0)
 
-        # Action Buttons
         buttons = ft.Row([
-            ft.ElevatedButton(
-                "Download", 
-                icon=ft.Icons.DOWNLOAD, 
-                on_click=self.start_download_thread,
-                style=ft.ButtonStyle(color=ft.Colors.WHITE, bgcolor=ft.Colors.BLUE_800)
-            ),
+            self.btn_download,
             ft.OutlinedButton(
                 "Check Dups", 
                 icon=ft.Icons.REPLAY,
@@ -179,7 +202,11 @@ class MusicLoaderApp:
             ),
         ], alignment=ft.MainAxisAlignment.CENTER)
 
-        # Main Layout
+        log_header = ft.Row([
+            ft.Text("Logs & Activity", size=16, weight="bold", expand=True),
+            self.btn_clear_logs
+        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+
         self.page.add(
             header,
             ft.Divider(height=20, color="transparent"),
@@ -189,7 +216,7 @@ class MusicLoaderApp:
             ft.Divider(height=10, color="transparent"),
             buttons,
             self.progress_bar,
-            ft.Text("Logs & Activity", size=16, weight="bold"),
+            log_header,
             ft.Container(
                 content=self.log_column,
                 height=200,
