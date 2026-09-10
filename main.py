@@ -81,12 +81,11 @@ class MusicLoaderApp:
     def run_downloads(self, urls, download_mode):
         if download_mode == "video":
             self.log("📹 Format Mode: Progressive MP4 Video", ft.Colors.BLUE_400)
-            # Grabs a single pre-merged file so Android doesn't need ffmpeg to combine them
             format_rule = 'best[ext=mp4]/best'
         else:
             self.log("🎵 Format Mode: Audio Streams", ft.Colors.BLUE_400)
-            # Falls back gracefully if 140/m4a is geo-blocked
-            format_rule = 'bestaudio[ext=m4a]/bestaudio/best'
+            # Removed fallback to 'best' to prevent downloading video files
+            format_rule = 'bestaudio[ext=m4a]/bestaudio'
 
         ydl_opts = {
             'format': format_rule, 
@@ -94,7 +93,6 @@ class MusicLoaderApp:
             'progress_hooks': [self.progress_hook],
             'quiet': True,
             'noplaylist': True,
-            # Bypass for the 403 Forbidden error using client spoofing
             'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
             'nocheckcertificate': True
         }
@@ -116,7 +114,6 @@ class MusicLoaderApp:
         self.page.update()
 
     def start_download_thread(self, e):
-        # Extract and clean URLs
         raw_urls = self.url_input.value.splitlines() if self.url_input.value else []
         urls = [u.strip() for u in raw_urls if u.strip()]
         
@@ -126,7 +123,6 @@ class MusicLoaderApp:
             self.page.update()
             return
         
-        # Lock button to prevent duplicate concurrent threads
         self.is_downloading = True
         self.btn_download.disabled = True
         self.page.update()
