@@ -21,6 +21,10 @@ class MusicLoaderApp:
         self.page.window_width = 400
         self.page.window_height = 800
         
+        # Color Theme derived from Logo (Vibrant Blue & Accent Orange)
+        self.COLOR_PRIMARY = ft.Colors.BLUE_600
+        self.COLOR_ACCENT = ft.Colors.ORANGE_600
+        
         # State management
         self.is_downloading = False
         
@@ -31,18 +35,19 @@ class MusicLoaderApp:
             multiline=True,
             min_lines=3,
             max_lines=5,
-            border_color=ft.Colors.BLUE_700
+            border_color=self.COLOR_PRIMARY,
+            focused_border_color=self.COLOR_ACCENT
         )
         
         self.format_selector = ft.RadioGroup(
             content=ft.Row([
-                ft.Radio(value="audio", label="Audio (M4A)"),
-                ft.Radio(value="video", label="Video (MP4)")
+                ft.Radio(value="audio", label="Audio Only (M4A/WebM)", active_color=self.COLOR_ACCENT),
+                ft.Radio(value="video", label="Video (MP4)", active_color=self.COLOR_ACCENT)
             ], alignment=ft.MainAxisAlignment.CENTER)
         )
         self.format_selector.value = "audio" 
         
-        self.progress_bar = ft.ProgressBar(width=400, color="blue", visible=False)
+        self.progress_bar = ft.ProgressBar(width=400, color=self.COLOR_ACCENT, visible=False)
         self.log_column = ft.Column(scroll=ft.ScrollMode.ADAPTIVE, expand=True)
         self.dup_list = ft.Column(visible=False)
 
@@ -51,12 +56,15 @@ class MusicLoaderApp:
             "Download", 
             icon=ft.Icons.DOWNLOAD, 
             on_click=self.start_download_thread,
-            style=ft.ButtonStyle(color=ft.Colors.WHITE, bgcolor=ft.Colors.BLUE_800)
+            style=ft.ButtonStyle(
+                color=ft.Colors.WHITE, 
+                bgcolor=self.COLOR_PRIMARY
+            )
         )
         self.btn_clear_logs = ft.IconButton(
             icon=ft.Icons.DELETE_SWEEP, 
             tooltip="Clear Logs",
-            icon_color="grey",
+            icon_color=ft.Colors.GREY_400,
             on_click=self.clear_logs
         )
 
@@ -77,14 +85,14 @@ class MusicLoaderApp:
             self.progress_bar.visible = False
             self.page.update()
 
-    # --- DOWNLOAD LOGIC (Mobile Optimized) ---
+    # --- DOWNLOAD LOGIC ---
     def run_downloads(self, urls, download_mode):
         if download_mode == "video":
-            self.log("📹 Format Mode: Progressive MP4 Video", ft.Colors.BLUE_400)
-            format_rule = 'best[ext=mp4]/best'
+            self.log("📹 Format Mode: MP4 Video", self.COLOR_PRIMARY)
+            format_rule = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
         else:
-            self.log("🎵 Format Mode: Audio Streams", ft.Colors.BLUE_400)
-            # Removed fallback to 'best' to prevent downloading video files
+            self.log("🎵 Format Mode: Audio Only", self.COLOR_PRIMARY)
+            # Strictly matches audio streams; never falls back to video
             format_rule = 'bestaudio[ext=m4a]/bestaudio'
 
         ydl_opts = {
@@ -93,17 +101,20 @@ class MusicLoaderApp:
             'progress_hooks': [self.progress_hook],
             'quiet': True,
             'noplaylist': True,
-            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
             'nocheckcertificate': True
         }
 
         for url in urls:
-            if not url: continue
+            if not url: 
+                continue
             try:
-                self.log(f"🚀 Starting: {url[:30]}...", ft.Colors.BLUE_200)
+                # Fetch metadata first to log human-readable title
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([url])
-                self.log("✅ Saved to Downloads!", ft.Colors.GREEN_400)
+                    info = ydl.extract_info(url, download=False)
+                    title = info.get('title', 'Unknown Title')
+                    self.log(f"🚀 Starting: {title}", self.COLOR_ACCENT)
+                    ydl.process_info(info)
+                self.log(f"✅ Saved: {title}", ft.Colors.GREEN_400)
             except Exception as e:
                 self.log(f"❌ Failed: {str(e)}", ft.Colors.RED_400)
         
@@ -134,9 +145,9 @@ class MusicLoaderApp:
     def check_duplicates(self, e):
         self.log_column.controls.clear()
         self.dup_list.controls.clear()
-        self.log("🔎 Scanning library...", ft.Colors.AMBER)
+        self.log("🔎 Scanning library...", self.COLOR_ACCENT)
         
-        files = [f for f in os.listdir(DOWNLOAD_PATH) if f.endswith(('.mp3', '.m4a', '.mp4'))]
+        files = [f for f in os.listdir(DOWNLOAD_PATH) if f.endswith(('.mp3', '.m4a', '.mp4', '.webm'))]
         seen_files = {} 
         duplicates = []
 
@@ -160,11 +171,11 @@ class MusicLoaderApp:
                 self.dup_list.controls.append(
                     ft.Container(
                         content=ft.Row([
-                            ft.Icon(ft.Icons.COPY, color="amber"),
+                            ft.Icon(ft.Icons.COPY, color=self.COLOR_ACCENT),
                             ft.Text(f"{fname[:20]}...", expand=True),
                             ft.IconButton(
                                 icon=ft.Icons.DELETE_FOREVER,
-                                icon_color="red",
+                                icon_color=ft.Colors.RED_400,
                                 on_click=lambda _, p=dup_path: self.delete_file(p)
                             )
                         ]),
@@ -185,8 +196,8 @@ class MusicLoaderApp:
 
     def build(self):
         header = ft.Column([
-            ft.Text("Bobsicles Mp3s", size=32, weight="bold", color="blue"),
-            ft.Text("Mobile Batch Downloader", size=14, color="grey"),
+            ft.Text("Bobsicles Mp3s", size=32, weight="bold", color=self.COLOR_PRIMARY),
+            ft.Text("Mobile Batch Downloader", size=14, color=ft.Colors.GREY_400),
         ], spacing=0)
 
         buttons = ft.Row([
@@ -194,7 +205,8 @@ class MusicLoaderApp:
             ft.OutlinedButton(
                 "Check Dups", 
                 icon=ft.Icons.REPLAY,
-                on_click=self.check_duplicates
+                on_click=self.check_duplicates,
+                style=ft.ButtonStyle(color=self.COLOR_ACCENT)
             ),
         ], alignment=ft.MainAxisAlignment.CENTER)
 
@@ -207,7 +219,7 @@ class MusicLoaderApp:
             header,
             ft.Divider(height=20, color="transparent"),
             self.url_input,
-            ft.Text("Select Format Option:", size=14, weight="bold", color="blue_200"),
+            ft.Text("Select Format Option:", size=14, weight="bold", color=self.COLOR_PRIMARY),
             self.format_selector,
             ft.Divider(height=10, color="transparent"),
             buttons,
@@ -229,3 +241,4 @@ def main(page: ft.Page):
     app.build()
 
 ft.app(main)
+
